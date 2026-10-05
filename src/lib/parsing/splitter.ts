@@ -1,54 +1,82 @@
-import { startsWithAction, stripLeadingFiller } from './language'
+import {
+  isEllipticalTemporalFragment,
+  startsWithAction,
+  startsWithActionAfterTemporal,
+  stripLeadingFiller,
+} from './language'
 
-// Hard breaks: a new line, ";", or a sentence-ending . ! ? (followed by a space
-// or the end of the text, so decimals like "2.5" are not split).
+// Hard breaks: a new line, ";", or a sentence-ending . ! ?
+// followed by a space or the end of the text.
 const HARD_BREAK = /[\r\n;]+|[.!?]+(?=\s|$)/
 
-// Soft breaks: " and ", " then ", " and then ", " & ".
+// Soft breaks: "and", "then", "and then", "&".
 const CONJUNCTION = /\s+(?:and\s+then|and|then|&)\s+/gi
 
-// Splits one block of text on conjunctions, but ONLY where the words after the
-// conjunction look like a new task (start with an action verb plus an object).
+function startsNewTask(text: string, needsObject = false): boolean {
+  return (
+    startsWithAction(text, needsObject) ||
+    startsWithActionAfterTemporal(text, needsObject)
+  )
+}
+
 function splitOnConjunctions(segment: string): string[] {
   const parts: string[] = []
   let start = 0
+
   for (const match of segment.matchAll(CONJUNCTION)) {
-    const rest = segment.slice(match.index + match[0].length)
-    if (startsWithAction(rest, true)) {
+    const rest = segment.slice(
+      (match.index ?? 0) + match[0].length
+    )
+
+    if (
+      startsNewTask(rest, true) ||
+      isEllipticalTemporalFragment(rest)
+    ) {
       parts.push(segment.slice(start, match.index))
-      start = match.index + match[0].length
+      start = (match.index ?? 0) + match[0].length
     }
   }
+
   parts.push(segment.slice(start))
+
   return parts
 }
 
-// A block is the text between hard breaks. Inside it we split on commas and
-// conjunctions, then glue back any piece that does not start a new task.
 function splitBlock(block: string): string[] {
   const clauses: string[] = []
+
   for (const segment of block.split(',')) {
     for (const piece of splitOnConjunctions(segment)) {
       const text = piece.trim()
-      if (stripLeadingFiller(text) === '') continue // empty, or only filler like "and"
+
+      if (stripLeadingFiller(text) === '') continue
+
       const last = clauses.length - 1
-      if (last < 0 || startsWithAction(text)) {
-        clauses.push(text) // starts with a verb: a new task
+
+      if (
+        last < 0 ||
+        startsNewTask(text) ||
+        isEllipticalTemporalFragment(text)
+      ) {
+        clauses.push(text)
       } else {
-        clauses[last] += ', ' + text // "eggs", "bread", "2026": part of the previous task
+        clauses[last] += ', ' + text
       }
     }
   }
+
   return clauses
 }
 
-// Input -> list of clauses (one per intended task). Pure: no dates involved here.
 export function splitClauses(input: string): string[] {
-  // "5 p.m." -> "5 pm", so the dots are not mistaken for sentence ends.
+  // Prevent "5 p.m." from being interpreted as a sentence boundary.
   const text = input.replace(/\b([ap])\.m\.?/gi, '$1m')
+
   const clauses: string[] = []
+
   for (const block of text.split(HARD_BREAK)) {
     clauses.push(...splitBlock(block))
   }
+
   return clauses
 }

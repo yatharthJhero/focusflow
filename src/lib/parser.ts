@@ -1,7 +1,7 @@
 import type { TaskDraft } from '../types'
 import { chronoRecognizer } from './parsing/chrono'
 import { findDeadline, type Recognizer } from './parsing/deadline'
-import { capitalize, cleanTitle, tidyEdges } from './parsing/language'
+import { capitalize, cleanTitle,isEllipticalTemporalFragment, tidyEdges } from './parsing/language'
 import { splitClauses } from './parsing/splitter'
 
 // The parser boundary. Pipeline:
@@ -14,8 +14,21 @@ export function parseInput(text: string, now: Date, recognize: Recognizer = chro
   if (!/[\p{L}\p{N}]/u.test(sourceText)) return [] // blank, or only punctuation: nothing to add
 
   try {
-    const clauses = attachDateFragments(splitClauses(sourceText), now, recognize)
-    const drafts = clauses.map((clause) => toDraft(clause, now, recognize)).filter((draft) => draft.title !== '')
+    const clauses = attachDateFragments(
+  splitClauses(sourceText),
+  now,
+  recognize
+)
+
+const resolvedClauses = expandEllipticalFragments(
+  clauses,
+  now,
+  recognize
+)
+
+const drafts = resolvedClauses
+  .map((clause) => toDraft(clause, now, recognize))
+  .filter((draft) => draft.title !== '')
     if (drafts.length > 0) return drafts
   } catch {
     // Any unexpected error falls through to the fallback below.
@@ -48,6 +61,36 @@ function attachDateFragments(clauses: string[], now: Date, recognize: Recognizer
   }
   if (pending) merged.push(pending) // the input was only a date: keep it rather than lose it
   return merged
+}
+function expandEllipticalFragments(
+  clauses: string[],
+  now: Date,
+  recognize: Recognizer
+): string[] {
+  const resolved: string[] = []
+
+  for (const clause of clauses) {
+    if (
+      resolved.length > 0 &&
+      isEllipticalTemporalFragment(clause)
+    ) {
+      const previousClause = resolved[resolved.length - 1]
+      const previousDraft = toDraft(
+        previousClause,
+        now,
+        recognize
+      )
+
+      if (previousDraft.title) {
+        resolved.push(`${previousDraft.title} ${clause}`)
+        continue
+      }
+    }
+
+    resolved.push(clause)
+  }
+
+  return resolved
 }
 
 function toDraft(clause: string, now: Date, recognize: Recognizer) {

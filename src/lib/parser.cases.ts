@@ -72,6 +72,25 @@ export const PARSER_CASES: ParserCase[] = [
     expected: [task('Buy milk, eggs and bread', '2026-10-06 23:59')],
   },
   {
+    name: 'temporal prefix before action',
+    input: 'Do my assignment and tomorrow i want to go to gym',
+    expected: [task('Do my assignment'),task('Go to gym', '2026-10-06 23:59'),],
+  },
+  {
+    name: 'day after tomorrow with explicit action',
+    input: 'day after tomorrow call Rahul',expected: [task('Call Rahul', '2026-10-07 23:59'),],
+  },
+  {
+    name: 'elliptical temporal fragment inherits previous action',
+    input:'Do my assignment and tomorrow i want to go to gym, and day after tomorrow with my friend',
+    expected: [task('Do my assignment'),task('Go to gym', '2026-10-06 23:59'),task('Go to gym with my friend', '2026-10-07 23:59'),],
+  },
+  {
+    name: 'tomorrow before action with filler',
+    input: 'tomorrow I need to submit the report',
+    expected: [task('Submit the report', '2026-10-06 23:59'),],
+  },
+  {
     name: '"and" between two actions splits',
     input: 'finish assignment and call Rahul',
     expected: [task('Finish assignment'), task('Call Rahul')],
@@ -163,6 +182,9 @@ export const SPLIT_CASES: SplitCase[] = [
   { input: 'submit report by Dec 3, 2026', clauses: ['submit report by Dec 3, 2026'] },
   { input: 'buy milk\ncall Rahul', clauses: ['buy milk', 'call Rahul'] },
   { input: 'milk\neggs', clauses: ['milk', 'eggs'] },
-  { input: 'And then call mom', clauses: ['call mom'] }, // leading filler is not a task
+  { input: 'And then call mom', clauses: ['call mom'] },
+  {input:  'Do my assignment and tomorrow i want to go to gym, and day after tomorrow with my friend',clauses: ['Do my assignment','tomorrow i want to go to gym','day after tomorrow with my friend',],},
+  {input:  'tomorrow I need to submit the report',clauses: ['tomorrow I need to submit the report'],},
+  {input:  'day after tomorrow call Rahul',clauses: ['day after tomorrow call Rahul'],}, // leading filler is not a task
   { input: '', clauses: [] },
 ]

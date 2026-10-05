@@ -32,11 +32,47 @@ export type Deadline = {
 }
 
 const TONIGHT_RE = /\btonight\b(?:\s+(?:at|by|around|before)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?(?![a-z0-9]))?/i
-const WEEK_RE =
-  /\b(?:(?:by|before)\s+)?(?:(?:the\s+)?end\s+of\s+|later\s+|sometime\s+)?(this|next)\s+week\b/i
+const WEEK_RE = /\b(?:(?:by|before)\s+)?(?:(?:the\s+)?end\s+of\s+|later\s+|sometime\s+)?(this|next)\s+week\b/i
 
+const DAY_AFTER_TOMORROW_RE = /\b(?:the\s+)?day after tomorrow\b(?:\s+(?:at|by|around)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)(?![a-z0-9]))?/i
 function atTime(base: Date, hour: number, minute: number): Date {
   return new Date(base.getFullYear(), base.getMonth(), base.getDate(), hour, minute, 0, 0)
+}
+
+function dayAfterTomorrowDeadline(
+  match: RegExpExecArray,
+  now: Date
+): Deadline {
+  if (match[1] === undefined) {
+    return {
+      dueAt: endOfDay(now, 2),
+      dueHasTime: false,
+      index: match.index,
+      length: match[0].length,
+    }
+  }
+
+  let hour = Number(match[1])
+  const minute = match[2] ? Number(match[2]) : 0
+  const meridiem = match[3].toLowerCase()
+
+  if (meridiem === 'pm' && hour < 12) hour += 12
+  if (meridiem === 'am' && hour === 12) hour = 0
+
+  return {
+    dueAt: new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate() + 2,
+      hour,
+      minute,
+      0,
+      0
+    ),
+    dueHasTime: true,
+    index: match.index,
+    length: match[0].length,
+  }
 }
 
 function endOfDay(base: Date, plusDays = 0): Date {
@@ -84,6 +120,10 @@ function resolveRecognized(hit: RecognizedDate, now: Date): Date {
 }
 
 export function findDeadline(clause: string, now: Date, recognize: Recognizer): Deadline | null {
+   const dayAfterTomorrow = DAY_AFTER_TOMORROW_RE.exec(clause)
+   if (dayAfterTomorrow) {
+    return dayAfterTomorrowDeadline(dayAfterTomorrow, now)
+   }
   const tonight = TONIGHT_RE.exec(clause)
   if (tonight) return tonightDeadline(tonight, now)
 

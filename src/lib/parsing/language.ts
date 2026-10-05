@@ -54,6 +54,61 @@ export function startsWithAction(text: string, needsObject = false): boolean {
   return ACTION_VERBS.has(first) && (!needsObject || words.length > 1)
 }
 
+const DAY_NAME =
+  '(?:sun(?:day)?|mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?)'
+
+const TEMPORAL_PREFIX_RE = new RegExp(
+  `^\\s*(?:(?:by|on|at|around|before|until|till)\\s+)?(?:the\\s+)?(?:day after tomorrow|tomorrow|tonight|today|this week|next week|(?:this|next)\\s+${DAY_NAME}|${DAY_NAME})(?=\\b)`,
+  'i'
+)
+
+const LEADING_CLOCK_RE =
+  /^(?:at|around|by)\s+\d{1,2}(?::\d{2})?\s*(?:a\.?m\.?|p\.?m\.?)?\b\s*/i
+
+export type TemporalPrefix = {
+  phrase: string
+  rest: string
+}
+
+export function stripLeadingTemporal(text: string): TemporalPrefix | null {
+  const cleaned = stripLeadingFiller(text)
+  const match = TEMPORAL_PREFIX_RE.exec(cleaned)
+
+  if (!match) return null
+
+  let rest = cleaned.slice(match[0].length).trim()
+
+  rest = rest.replace(LEADING_CLOCK_RE, '').trim()
+  rest = stripLeadingFiller(rest)
+
+  return {
+    phrase: match[0].trim(),
+    rest,
+  }
+}
+
+export function startsWithActionAfterTemporal(
+  text: string,
+  needsObject = false
+): boolean {
+  const temporal = stripLeadingTemporal(text)
+
+  if (!temporal) return false
+
+  return startsWithAction(temporal.rest, needsObject)
+}
+
+const ELLIPTICAL_MODIFIER_RE =
+  /^(?:with|for|using|together with|along with|without|near)\b/i
+
+export function isEllipticalTemporalFragment(text: string): boolean {
+  const temporal = stripLeadingTemporal(text)
+
+  if (!temporal || !temporal.rest) return false
+
+  return ELLIPTICAL_MODIFIER_RE.test(temporal.rest)
+}
+
 export type Span = { index: number; length: number }
 
 const EDGE_PUNCTUATION = /^[\s,;:.!?-]+|[\s,;:.!?-]+$/g
